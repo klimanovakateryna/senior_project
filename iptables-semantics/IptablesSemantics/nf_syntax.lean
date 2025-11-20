@@ -44,7 +44,7 @@ def is_decided : Verdict -> Bool
   /--Expressions-/
 inductive Expression (A : Type) where
   | Compare (primitive : A) -- nft_cmp: sets BREAK if fails
-  | setVerdict (v: Verdict) (chain : Option String) -- nft_immediate stores a user-controlled immediate value into an arbitrary register
+  | setVerdict (v: Verdict) (chain : Option String)
 
 /--Rules in nftables contain expression lists-/
 structure Rule (A : Type) where
