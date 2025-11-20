@@ -1,0 +1,10 @@
+name = "iptables-semantics"
+version = "0.1.0"
+
+[[lean_lib]]
+name = "IptablesSemantics"
+root = "IptablesSemantics"
+
+[[lean_exe]]
+name = "main"
+root = "Main"
