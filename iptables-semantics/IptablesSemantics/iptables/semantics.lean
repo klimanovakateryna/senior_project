@@ -1,10 +1,11 @@
-import IptablesSemantics.syntax
-import IptablesSemantics.decision_state
+import IptablesSemantics.iptables.syntax
+import IptablesSemantics.iptables.decision_state
 
-open Firewall
+open Iptables
+
 /-- A firewall ruleset is a map of chain names to the list of rules.
     Partial map from string to list of rules. -/
-abbrev Ruleset (A : Type) : Type := String -> Option (List (Firewall.Rule A)) -- Ruleset A is an shorthand for a func that maps a chain name to a list
+abbrev Ruleset (A : Type) : Type := String -> Option (List (Iptables.Rule A)) -- Ruleset A is an shorthand for a func that maps a chain name to a list
 
 /--A matcher (parametrized by the type of primitive A and packet P)
 is a function which just tells whether a given primitive and packet matches-/
