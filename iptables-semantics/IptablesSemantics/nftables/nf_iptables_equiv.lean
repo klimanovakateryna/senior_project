@@ -19,22 +19,29 @@ inductive simulation : ProcessingDecision -> Registers -> Prop where
 
 /-- The iptables initial state (undecided) and nftables initial state (initial_register)
    satisfy the simulation relation -/
-theorem simul_initial : simulation ProcessingDecision.undecided initial_register := by
+theorem simulation_initial : simulation ProcessingDecision.undecided initial_register := by
   unfold initial_register
   exact simulation.undecided
 
 /-- Determinism for simulation relation  each ProcessingDecision maps exactly one Registers state
 -/
-theorem simRel_deterministic : ∀ (pd : ProcessingDecision) (r1 r2 : Registers),
+theorem simulation_deterministic : ∀ (pd : ProcessingDecision) (r1 r2 : Registers),
                               simulation pd r1 -> simulation pd r2 -> r1 = r2 := by
   intro pd r1 r2 h1 h2
-  cases h1 <;>
-  cases h2 <;>
-  rfl
+  cases h1
+  case undecided =>
+    cases h2
+    rfl
+  case allow =>
+    cases h2
+    rfl
+  case deny =>
+    cases h2
+    rfl
 
 /--Totality for simulation relation = rach iptables state has a corresponding nftables state.
    -/
-theorem simrel_total : ∀ (pd : ProcessingDecision), ∃ (r : Registers),
+theorem simulation_total : ∀ (pd : ProcessingDecision), ∃ (r : Registers),
 simulation pd r := by
   intro pd
   cases pd with
@@ -626,15 +633,12 @@ induction ipt_eval generalizing regs with
   -- iptables_bigstep Γ γ p [{ matchExpr := m, action := Action.Accept }]
   -- ProcessingDecision.undecided (ProcessingDecision.decision FinalDecision.allow)
 
-  /- If the match succeds, a single Accept rule takes iptables
-  from undecided to allow
-  -/
   | accept =>
     have regs_eq : regs = initial_register := by
       cases sm
       rfl
     rw[regs_eq]
-    exact accept_equivalence Γ γ p _ ‹_›
+    exact accept_equivalence Γ γ _ p ‹_›
 
   | drop =>
   /- ⊢ ∃ regs',
@@ -731,13 +735,6 @@ induction ipt_eval generalizing regs with
             exact sim_mid
 
   | call_return =>
-    /-| call_return {m chain rs₁ m' rs₂} :
-    matchExpression γ m p = true →            -- (1) call rule matches
-    Γ chain = some (rs₁ ++ [{m', Return}] ++ rs₂) →  -- (2) chain structure
-    matchExpression γ m' p = true →           -- (3) return rule matches
-    iptables_bigstep Γ γ p rs₁ undecided undecided →  -- (4) rs₁ stays undecided
-    iptables_bigstep Γ γ p [{m, Call chain}] undecided undecided
-    -/
     rename_i m1 chain rs1 m2 rs2 hyp_match1 hyp_chain hyp_match2 eval H1
     have regs_eq : regs = initial_register := by
       cases sm
