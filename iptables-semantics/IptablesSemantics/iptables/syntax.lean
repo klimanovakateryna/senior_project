@@ -11,15 +11,16 @@ inductive Action
 | Goto (chain : String)
 | Empty
 | Unknown
+deriving BEq
 
 end Iptables
 
 /--Match expressions-/
-inductive MatchExpr (A : Type) -- polimorphic type A, works for any type A
-| Match (a : A) -- wraps a raw value of type A into a MatchExpr A
-| MatchNot (m : MatchExpr A) -- logical negation, takes an existing match expression m of type MatchExpr A
-| MatchAnd(m1 m2 : MatchExpr A) -- conjunction of two subexpressions, take two match expressions m1 and m2
-| MatchAny -- an always true expression
+inductive MatchExpr (A : Type)
+| Match (a : A)
+| MatchNot (m : MatchExpr A)
+| MatchAnd(m1 m2 : MatchExpr A)
+| MatchAny
 
 /--Builds Or via De Morgan-/
 def Iptables.matchOr {A} (m1 m2 : MatchExpr A) : MatchExpr A

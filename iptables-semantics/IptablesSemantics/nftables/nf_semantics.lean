@@ -9,7 +9,7 @@ open Nftables
 abbrev NfRuleset (A : Type) : Type := String -> Option (List (Rule A))
 
 inductive expression_evaluation {A P : Type} (γ : Matcher A P) (p : P) :
-    Expression A -> Registers -> Registers -> Prop where
+Expression A -> Registers -> Registers -> Prop where
 
   | comparison_true {regs m} :
       matchExpression γ m p = true ->
@@ -27,8 +27,7 @@ inductive ExprListEval
 
 /-- Evaluate expressions and return whether they elist_match -/
 inductive expressions_match {A P : Type} (γ : Matcher A P) (p : P) :
-    List (Expression A) -> Registers -> ExprListEval -> Prop where
-  /-- Empty list: trivially matches -/
+List (Expression A) -> Registers -> ExprListEval -> Prop where
   | empty {regs} :
       expressions_match γ p [] regs ExprListEval.elist_match
   /-- Expression fails: not elist_match -/
@@ -48,14 +47,16 @@ def apply_statement (stmt : Statement) (regs : Registers) : Registers :=
   let (v, chain) := statement_to_verdict stmt
   {regs with verdict := v, destination_chain := chain}
 
+open Nftables in
 /-- Rule evaluation. If all expressions matched, apply the statement, otherwise skip, and move to the next rule. -/
 inductive rule_evaluation {A P : Type} (Γ : NfRuleset A) (γ : Matcher A P) (p : P) :
-    Rule A -> Registers -> Registers -> Prop where
+Rule A -> Registers -> Registers -> Prop where
 
   /-- The rule expressions' [e1, e2, .., en] all match, so apply statement -/
-  | elist_match {r regs} :
+  | elist_match {r regs st} :
+    r.statement = RuleStatement.SingleStatement st ->
     expressions_match γ p r.expressions regs ExprListEval.elist_match ->
-    rule_evaluation Γ γ p r regs (apply_statement r.statement regs)
+    rule_evaluation Γ γ p r regs (apply_statement st regs)
 
   /-- One rule expression [e1, e2, .., en] does not match. Set verdict to Continue and skip the rule.
   The evaluation proceeds to the next rule. -/
@@ -63,10 +64,9 @@ inductive rule_evaluation {A P : Type} (Γ : NfRuleset A) (γ : Matcher A P) (p 
     expressions_match γ p r.expressions regs ExprListEval.elist_nomatch ->
     rule_evaluation Γ γ p r regs {regs with verdict := Verdict.NFT_CONTINUE}
 
-
 /-- Ruleset evaluation -/
 inductive ruleset_evaluation {A P : Type} (Γ : NfRuleset A) (γ : Matcher A P) (p : P) :
-    List (Rule A) -> Registers -> Registers -> Prop where
+List (Rule A) -> Registers -> Registers -> Prop where
 
   | skip {regs} :
       ruleset_evaluation Γ γ p [] regs regs
@@ -108,8 +108,7 @@ inductive ruleset_evaluation {A P : Type} (Γ : NfRuleset A) (γ : Matcher A P) 
       regs1.verdict = Verdict.NFT_JUMP ->
       regs1.destination_chain = some chain ->
       Γ chain = some chain_rules ->
-      ruleset_evaluation Γ γ p chain_rules
-        {regs1 with verdict := Verdict.NFT_CONTINUE, destination_chain := none} regs2 ->
+      ruleset_evaluation Γ γ p chain_rules {regs1 with verdict := Verdict.NFT_CONTINUE, destination_chain := none} regs2 ->
       ruleset_evaluation Γ γ p rs
         (if regs2.verdict = Verdict.NFT_RETURN then
           {regs2 with verdict := Verdict.NFT_CONTINUE, destination_chain := none}
@@ -130,22 +129,19 @@ inductive ruleset_evaluation {A P : Type} (Γ : NfRuleset A) (γ : Matcher A P) 
     (regs.verdict = Verdict.NFT_ACCEPT ∨ regs.verdict = Verdict.NFT_DROP) ->
     ruleset_evaluation Γ γ p rs regs regs
 
-
-
 /-- Expression evaluation is deterministic -/
 theorem expression_evaluation_determinism {A P : Type} (γ : Matcher A P) (p : P) :
-    ∀ (e : Expression A) (regs regs1 regs2 : Registers),
-    expression_evaluation γ p e regs regs1 ->
-    expression_evaluation γ p e regs regs2 ->
-    regs1 = regs2 := by
+∀ (e : Expression A) (regs regs1 regs2 : Registers),
+expression_evaluation γ p e regs regs1 ->
+expression_evaluation γ p e regs regs2 ->
+regs1 = regs2 := by
   intro e regs regs1 regs2 h1 h2
   cases h1 <;> cases h2 <;> simp_all
 
 /-- Expressions match is deterministic -/
 theorem expressions_match_determinism {A P : Type} (γ : Matcher A P) (p : P)
-    (es : List (Expression A)) (regs : Registers) (r1 r2 : ExprListEval)
-    (h1 : expressions_match γ p es regs r1)
-    (h2 : expressions_match γ p es regs r2) : r1 = r2 := by
+(es : List (Expression A)) (regs : Registers) (r1 r2 : ExprListEval)
+(h1 : expressions_match γ p es regs r1) (h2 : expressions_match γ p es regs r2) : r1 = r2 := by
   induction h1 generalizing r2 with
   | empty => cases h2; rfl
   | fail he hv =>
@@ -174,7 +170,7 @@ theorem rule_evaluation_determinism {A P : Type} (Γ : NfRuleset A) (γ : Matche
   cases h1 with
   | elist_match hm1 =>
     cases h2 with
-    | elist_match hm2 => rfl
+    | elist_match hm2 h2=> simp_all
     | elist_nomatch hnm2 =>
       have := expressions_match_determinism γ p _ _ _ _ hm1 hnm2
       contradiction

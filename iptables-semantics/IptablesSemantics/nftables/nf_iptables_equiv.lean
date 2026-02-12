@@ -103,6 +103,7 @@ def action_to_statement : Action -> Statement
 def rule_translation {A : Type} : Iptables.Rule A -> Nftables.Rule A
   | {matchExpr := m, action := a} =>
     { expressions := [translate_match m],
+      sideEffects := [],
       statement := action_to_statement a }
 
 /--Ruleset translation-/
@@ -113,7 +114,6 @@ def ruleset_translation {A : Type} : List (Iptables.Rule A) -> List (Nftables.Ru
 /--Translate a ruleset map from iptables to nftables-/
 def translate_ruleset {A : Type} (Γ : Ruleset A) : NfRuleset A :=
   fun chain => Option.map ruleset_translation (Γ chain)
-
 
 /-- If the iptables match expression m succeeds on packet p,
 then the translated nftables expression list [ translation (m) ] also succeds.-/
@@ -170,7 +170,6 @@ theorem accept_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P)(m : 
     · rfl
   case h.right =>
     exact simulation.allow
-
 
 theorem drop_rej_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P) (p : P)
 (m : MatchExpr A) (hyp_match : matchExpression γ m p = true) :
@@ -419,15 +418,7 @@ lemma return_rule_eval {A P : Type} (Γ : Ruleset A) (γ : Matcher A P) (p : P)
   exact rule_evaluation.elist_match (l1_match γ p m regs hyp_match)
 
 /-- If iptables calls a chain and that chain hits a Return, then the
-  nftables translation produces undecided.
-
-  Jump logic (reminder):
-  - rules eval before call in main chain
-  - hit Call chain -> jump into the called chain
-  -- evaluate rs1 (stay undecided)
-  - hit Return and exit the called chain
-  -- rs2 is never reached
-  -- back to the main chain -/
+  nftables translation produces undecided -/
 theorem call_return_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P) (p : P)
 (m : MatchExpr A) (chain : String)
 
@@ -583,7 +574,6 @@ theorem call_result_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P)
   -- ⊢ Option.map ruleset_translation (Γ chain) = some (ruleset_translation rs)
     rw [hyp_chain]
     rfl
-
   -- ⊢ ∃ regs_out,
   -- ruleset_evaluation (translate_ruleset Γ) γ p (ruleset_translation [{ matchExpr := m, action := Action.Call chain }])
   -- initial_register regs_out ∧
@@ -613,8 +603,6 @@ theorem call_result_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P)
     apply And.intro
     exact ruleset_evaluation.jump rfl rule_pf jump_regs jump_dest chain_lookup chain_eval ruleset_evaluation.skip
     exact simulation.deny
-
-
 
 -- if iptables evaluates rs from state t to state t',
 -- and the nftables register regs correspond to t (via simulation),
