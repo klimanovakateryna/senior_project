@@ -104,7 +104,7 @@ def rule_translation {A : Type} : Iptables.Rule A -> Nftables.Rule A
   | {matchExpr := m, action := a} =>
     { expressions := [translate_match m],
       sideEffects := [],
-      statement := action_to_statement a }
+      statement := RuleStatement.SingleStatement (action_to_statement a) }
 
 /--Ruleset translation-/
 def ruleset_translation {A : Type} : List (Iptables.Rule A) -> List (Nftables.Rule A)
@@ -160,13 +160,12 @@ theorem accept_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P)(m : 
 (ruleset_translation [{ matchExpr := m, action := Action.Accept }]) initial_register regs
 ∧ simulation (ProcessingDecision.decision FinalDecision.allow) regs := by
 
-  use { initial_register with verdict := Verdict.NFT_ACCEPT, destination_chain := none }
+  use apply_statement Statement.Accept initial_register
   apply And.intro
   case h.left =>
     apply ruleset_evaluation.accept
     · rfl
-    · apply rule_evaluation.elist_match
-      exact l1_match γ p m initial_register hyp_match
+    · exact rule_evaluation.elist_match rfl (l1_match γ p m initial_register hyp_match)
     · rfl
   case h.right =>
     exact simulation.allow
@@ -177,13 +176,12 @@ theorem drop_rej_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P) (p
 (ruleset_translation [{ matchExpr := m, action := Action.Drop }])
 initial_register regs
 ∧ simulation (ProcessingDecision.decision FinalDecision.deny) regs := by
-  use { initial_register with verdict := Verdict.NFT_DROP, destination_chain := none }
+  use apply_statement Statement.Drop initial_register
   apply And.intro
   case h.left =>
     apply ruleset_evaluation.drop
     · rfl
-    · apply rule_evaluation.elist_match
-      exact l1_match γ p m initial_register hyp_match
+    · exact rule_evaluation.elist_match rfl (l1_match γ p m initial_register hyp_match)
     · rfl
   case h.right =>
     exact simulation.deny
@@ -241,7 +239,8 @@ theorem log_equivalence {A P : Type} (Γ : Ruleset A) (γ : Matcher A P) (p : P)
     apply ruleset_evaluation.nf_continue
     · rfl
     · apply rule_evaluation.elist_match
-      exact l1_match γ p m initial_register hyp_match
+      · rfl
+      · exact l1_match γ p m initial_register hyp_match
     · rfl
     · exact ruleset_evaluation.skip
   case h.right =>
@@ -257,7 +256,8 @@ initial_register regs2 ∧ simulation ProcessingDecision.undecided regs2 := by
     apply ruleset_evaluation.nf_continue
     · rfl
     · apply rule_evaluation.elist_match
-      exact l1_match γ p m initial_register hyp_match
+      · rfl
+      · exact l1_match γ p m initial_register hyp_match
     · rfl
     · exact ruleset_evaluation.skip
   case h.right =>
@@ -408,14 +408,14 @@ rule_evaluation (translate_ruleset Γ) γ p (rule_translation { matchExpr := m, 
 initial_register (apply_statement (Statement.Jump chain) initial_register) := by
 -- l1_match : iptables match success -> nftables expressions match
 -- rule_evaluation.elist_match: expressions match -> rule evaluates
-  exact rule_evaluation.elist_match (l1_match γ p m initial_register hyp_match)
+  exact rule_evaluation.elist_match rfl (l1_match γ p m initial_register hyp_match)
 
 lemma return_rule_eval {A P : Type} (Γ : Ruleset A) (γ : Matcher A P) (p : P)
     (m : MatchExpr A) (regs : Registers) (hyp_match : matchExpression γ m p = true) :
     rule_evaluation (translate_ruleset Γ) γ p
       (rule_translation {matchExpr := m, action := Action.Return})
       regs (apply_statement Statement.Return regs) := by
-  exact rule_evaluation.elist_match (l1_match γ p m regs hyp_match)
+  exact rule_evaluation.elist_match rfl (l1_match γ p m regs hyp_match)
 
 /-- If iptables calls a chain and that chain hits a Return, then the
   nftables translation produces undecided -/

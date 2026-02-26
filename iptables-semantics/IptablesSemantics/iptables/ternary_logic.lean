@@ -1,6 +1,5 @@
 import IptablesSemantics.iptables.syntax
 
-
 -- 6 Klenee logic
 -- datatype ternaryvalue = TernaryTrue | TernaryFalse | TernaryUnknown
 namespace KleeneLogic
@@ -138,10 +137,10 @@ def ternary_eval : ternaryformula -> Option Bool
 abbrev exact_match_tac (A P : Type) := A -> P -> ternaryvalue
 
 /-type-synonym ′packet unknown-match-tac=action ⇒′packet ⇒bool-/
-abbrev unknown_match_tac (P : Type) := Iptables.Action -> P -> Bool
+abbrev unknown_match_tac (DES P : Type) := DES -> P -> Bool
 
 /-type-synonym (′a,unknown-match-tac)′packet) match-tac=((′a,′packet) exact-match-tac × ′packet unknown-match-tac)-/
-abbrev match_tac (A P : Type) := exact_match_tac A P × unknown_match_tac P
+abbrev match_tac (A DES P : Type) := exact_match_tac A P × unknown_match_tac DES P
 
 /-fun map-match-tac :: (′a,
 ′packet) exact-match-tac ⇒′packet ⇒′a match-expr ⇒
@@ -162,7 +161,7 @@ def map_match_tac {A P : Type} (β : exact_match_tac A P) (p : P) : MatchExpr A 
 ternary-to-bool-unknown-match-tac - - - TernaryTrue= True |
 ternary-to-bool-unknown-match-tac - - - TernaryFalse= False |
 ternary-to-bool-unknown-match-tac α a p TernaryUnknown= α a p -/
-def ternary_to_bool_unknown_match_tac {P : Type} (α : unknown_match_tac P) (a : Iptables.Action) (p : P) : ternaryvalue -> Bool
+def ternary_to_bool_unknown_match_tac {DES P : Type} (α : unknown_match_tac DES P) (a : DES) (p : P) : ternaryvalue -> Bool
   | ternaryvalue.TernaryTrue => true
   | ternaryvalue.TernaryFalse => false
   | ternaryvalue.TernaryUnknown => α a p
@@ -172,7 +171,45 @@ def ternary_to_bool_unknown_match_tac {P : Type} (α : unknown_match_tac P) (a :
 ⇒bool where
 matches γm a p ≡ternary-to-bool-unknown-match-tac (snd γ) a p (ternary-ternary-eval
 (map-match-tac (fst γ) p m))-/
-def ternary_matches {A P : Type} (γ : match_tac A P) (m : MatchExpr A) (a : Iptables.Action) (p : P) : Bool :=
+def ternary_matches {A DES P : Type} (γ : match_tac A DES P) (m : MatchExpr A) (a : DES) (p : P) : Bool :=
   ternary_to_bool_unknown_match_tac γ.snd a p (ternary_ternary_eval (map_match_tac γ.fst p m))
+
+/-(* Predicate: formula is in Negation Normal Form *)
+inductive NegationNormalForm :: "ternaryformula ⇒ bool" where
+  NegationNormalForm (TernaryValue v) |
+  NegationNormalForm (TernaryNot (TernaryValue v)) |
+  NegationNormalForm φ ⟹ NegationNormalForm ψ ⟹
+    NegationNormalForm (TernaryAnd φ ψ) |
+  NegationNormalForm φ ⟹ NegationNormalForm ψ ⟹
+    NegationNormalForm (TernaryOr φ ψ) -/
+inductive NegationNormalForm : ternaryformula -> Prop
+  | TernaryValue : NegationNormalForm (ternaryformula.TernaryValue v)
+  | TernaryNotValue : NegationNormalForm (ternaryformula.TernaryNot (ternaryformula.TernaryValue v))
+  | TernaryAnd : NegationNormalForm φ -> NegationNormalForm ψ ->
+    NegationNormalForm (ternaryformula.TernaryAnd φ ψ)
+  | TernaryOr : NegationNormalForm φ -> NegationNormalForm ψ ->
+    NegationNormalForm (ternaryformula.TernaryOr φ ψ)
+
+/-(* Convert ternaryformula to NNF *)
+fun NNF_ternary :: "ternaryformula ⇒ ternaryformula" where
+  "NNF_ternary (TernaryValue v) = TernaryValue v" |
+  "NNF_ternary (TernaryAnd t1 t2) = TernaryAnd (NNF_ternary t1) (NNF_ternary t2)" |
+  "NNF_ternary (TernaryOr t1 t2) = TernaryOr (NNF_ternary t1) (NNF_ternary t2)" |
+  "NNF_ternary (TernaryNot (TernaryNot t)) = NNF_ternary t" |
+  "NNF_ternary (TernaryNot (TernaryValue v)) = TernaryValue (eval_ternary_Not v)" |
+  "NNF_ternary (TernaryNot (TernaryAnd t1 t2)) =
+    TernaryOr (NNF_ternary (TernaryNot t1)) (NNF_ternary (TernaryNot t2))" |
+  "NNF_ternary (TernaryNot (TernaryOr t1 t2)) =
+    TernaryAnd (NNF_ternary (TernaryNot t1)) (NNF_ternary (TernaryNot t2))" -/
+def NNF_ternary : ternaryformula -> ternaryformula
+  | ternaryformula.TernaryValue v => ternaryformula.TernaryValue v
+  | ternaryformula.TernaryAnd t1 t2 => ternaryformula.TernaryAnd (NNF_ternary t1) (NNF_ternary t2)
+  | ternaryformula.TernaryOr t1 t2 => ternaryformula.TernaryOr (NNF_ternary t1) (NNF_ternary t2)
+  | ternaryformula.TernaryNot (ternaryformula.TernaryNot t) => NNF_ternary t
+  | ternaryformula.TernaryNot (ternaryformula.TernaryValue v) => ternaryformula.TernaryValue (eval_ternary_Not v)
+  | ternaryformula.TernaryNot (ternaryformula.TernaryAnd t1 t2) =>
+    ternaryformula.TernaryOr (NNF_ternary (ternaryformula.TernaryNot t1)) (NNF_ternary (ternaryformula.TernaryNot t2))
+  | ternaryformula.TernaryNot (ternaryformula.TernaryOr t1 t2) =>
+    ternaryformula.TernaryAnd (NNF_ternary (ternaryformula.TernaryNot t1)) (NNF_ternary (ternaryformula.TernaryNot t2))
 
 end KleeneLogic

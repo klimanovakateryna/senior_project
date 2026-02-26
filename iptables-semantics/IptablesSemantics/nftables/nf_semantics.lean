@@ -168,16 +168,16 @@ theorem rule_evaluation_determinism {A P : Type} (Γ : NfRuleset A) (γ : Matche
     regs1 = regs2 := by
   intro r regs regs1 regs2 h1 h2
   cases h1 with
-  | elist_match hm1 =>
+  | elist_match heq1 hexprs1 =>
     cases h2 with
-    | elist_match hm2 h2=> simp_all
+    | elist_match heq2 hexprs2 => simp_all
     | elist_nomatch hnm2 =>
-      have := expressions_match_determinism γ p _ _ _ _ hm1 hnm2
+      have := expressions_match_determinism γ p _ _ _ _ hexprs1 hnm2
       contradiction
   | elist_nomatch hnm1 =>
     cases h2 with
-    | elist_match hm2 =>
-      have := expressions_match_determinism γ p _ _ _ _ hnm1 hm2
+    | elist_match heq2 hexprs2 =>
+      have := expressions_match_determinism γ p _ _ _ _ hnm1 hexprs2
       contradiction
     | elist_nomatch hnm2 => rfl
 

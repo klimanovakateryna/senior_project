@@ -23,7 +23,6 @@ def exprs_to_match {A : Type} : List (Nftables.Expression A) -> MatchExpr A
   | [Nftables.Expression.Comparison m] => m -- single exprs = unwrap
   | (Nftables.Expression.Comparison m) :: es => MatchExpr.MatchAnd m (exprs_to_match es)  -- multiple exprs = AND together
 
-
 /--extends to different rules-/
 def nf_unfold_maps_rule {A : Type}
 (es : List (Nftables.Expression A))
@@ -33,10 +32,11 @@ List (Nftables.Rule A) :=
   map.map fun (m, st) => ⟨es ++ [Nftables.Expression.Comparison (MatchExpr.Match m)], se, Nftables.RuleStatement.SingleStatement st⟩
 
 /--lookup + extend-/
-def nf_expand {A : Type} (lookup : Nftables.NfLookup) : List (Nftables.Rule A) -> List (Nftables.Rule A)
+def nf_expand {A : Type} (lookup : Nftables.NfLookup A) : List (Nftables.Rule A) -> List (Nftables.Rule A)
   | [] => []
-  | ⟨es, se, Nftables.RuleStatement.MapLookup mapName m⟩ :: rs =>
+  | ⟨es, se, Nftables.RuleStatement.MapLookup mapName _⟩ :: rs =>
     nf_unfold_maps_rule es se ((lookup mapName).getD []) ++ nf_expand lookup rs
+  | r :: rs => r :: nf_expand lookup rs
 
 #print ChainUnfolding.process_ret
 
@@ -51,15 +51,15 @@ def nf_process_ret {A : Type} : List (Nftables.Rule A) -> List (Nftables.Rule A)
 open Nftables in
 def nf_process_call {A : Type} (Γ : NfRuleset A) : List (Nftables.Rule A) -> List (Nftables.Rule A)
   | [] => [] --return empty list
-  | ⟨exprs, _, Nftables.RuleStatement.SingleStatement Nftables.Statement.Jump chain⟩ :: rs => -- first rule is ⟨exprs, _, Jump chain⟩
+  | ⟨exprs, _, Nftables.RuleStatement.SingleStatement (Nftables.Statement.Jump chain)⟩ :: rs => -- first rule is ⟨exprs, _, Jump chain⟩
     let target_chain := (Γ chain).getD [] -- chain lookup
     let m := exprs_to_match exprs -- [e1,e2,e3] transforms to (e1 ∧ e2 ∧ e3)
     nf_add_match m (nf_process_ret target_chain) ++ nf_process_call Γ rs -- eliminate returns, and prepend match to an inlined rule
   | r :: rs => r :: nf_process_call Γ rs
 
- def nf_process_goto {A : Type} (Γ : NfRuleset A) : List (Nftables.Rule A) -> List (Nftables.Rule A)
+def nf_process_goto {A : Type} (Γ : NfRuleset A) : List (Nftables.Rule A) -> List (Nftables.Rule A)
   | [] => []
-  | ⟨exprs, _, Nftables.RuleStatement.SingleStatement Nftables.Statement.Goto chain⟩ :: rs =>
+  | ⟨exprs, _, Nftables.RuleStatement.SingleStatement (Nftables.Statement.Goto chain)⟩ :: rs =>
     let target_chain := (Γ chain).getD []
     let m := exprs_to_match exprs
     nf_add_match m (nf_process_ret target_chain)
@@ -68,7 +68,10 @@ def nf_process_call {A : Type} (Γ : NfRuleset A) : List (Nftables.Rule A) -> Li
   | r :: rs => r :: nf_process_goto Γ rs
 
 def nf_simple_ruleset {A : Type} (rs : List (Nftables.Rule A)) : Bool :=
-  rs.all fun r => r.statement == Nftables.Statement.Accept || r.statement == Nftables.Statement.Drop
+  rs.all fun r => match r.statement with
+    | Nftables.RuleStatement.SingleStatement Nftables.Statement.Accept => true
+    | Nftables.RuleStatement.SingleStatement Nftables.Statement.Drop => true
+    | _ => false
 
 -- optimization function f applied to all match exprs
 def nf_optimize_matches {A : Type}
@@ -90,7 +93,7 @@ def nf_unfold_chain {A : Type}
       (nf_optimize_matches ChainUnfolding.opt_MatchAny_match_expr)
       (ChainUnfolding.repeat_stabilize 10000
         (fun rs => nf_process_goto Γ (nf_process_call Γ (nf_expand lookup rs)))
-        [⟨[], [], Nftables.RuleStatement.SingleStatement Nftables.Statement.Jump chain_name⟩, ⟨[], [], Nftables.RuleStatement.SingleStatement default_statement⟩])
+        [⟨[], [], Nftables.RuleStatement.SingleStatement (Nftables.Statement.Jump chain_name)⟩, ⟨[], [], Nftables.RuleStatement.SingleStatement default_statement⟩])
   if nf_simple_ruleset rs then some rs else none
 
 end NftablesChainUnfolding
